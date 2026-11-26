@@ -66,6 +66,35 @@ async def test_local_timer_enriched_without_changing_local_controls(
     assert fallback.attributes["color"] == 0xFFFFFFFF
 
 
+async def test_ha_solid_white_to_native_playlist(hass, loaded_entry, vendor, freezer):
+    # Given a controller showing solid white from the Home Assistant light service.
+    await hass.services.async_call(
+        "light",
+        "turn_on",
+        {
+            "entity_id": "light.house",
+            "rgbw_color": [255, 255, 255, 255],
+            "brightness": 255,
+        },
+        blocking=True,
+    )
+    assert hass.states.get(SENSOR).state == "#FFFFFF+W255"
+
+    # When the app starts a playlist after the HA command has settled.
+    freezer.tick(timedelta(seconds=6))
+    now = dt_util.utcnow()
+    vendor.local_states["hub"] = deepcopy(TIMER)
+    vendor.states["hub"] = {"onState": True, "playlist": demo(int(now.timestamp()) - 1)}
+    await loaded_entry.async_refresh()
+
+    # Then the first refresh reports the current playlist item over local control.
+    sensor = hass.states.get(SENSOR)
+    assert sensor.state == "Multipulse"
+    assert sensor.attributes["pattern"] == "Multipulse"
+    assert sensor.attributes["playlist"] == "Demo Playlist"
+    assert sensor.attributes["control"] == "local"
+
+
 async def test_playlist_to_solid_white(hass, loaded_entry, vendor):
     # Given native playlist metadata provided directly by the controller transport.
     start = int(dt_util.utcnow().timestamp()) - 1
